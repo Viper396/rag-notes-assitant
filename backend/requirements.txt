@@ -1,0 +1,9 @@
+fastapi
+uvicorn[standard]
+python-multipart
+chromadb
+google-generativeai
+langchain
+langchain-google-genai
+pypdf
+python-dotenv
