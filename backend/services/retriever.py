@@ -1,17 +1,39 @@
 from __future__ import annotations
 
 import os
-from typing import Any
+from typing import Any, TypedDict
 
 from dotenv import load_dotenv
 from langchain_google_genai import GoogleGenerativeAIEmbeddings
 
 load_dotenv()
 
+EMBEDDING_MODEL = "models/text-embedding-004"
 
-def retrieve_relevant_chunks(query: str, collection: Any, top_k: int = 5) -> list[dict[str, Any]]:
+
+class RetrievedChunk(TypedDict):
+    text: str
+    source: str | None
+    page_number: int | None
+    distance: float | None
+
+
+def _get_google_api_key() -> str:
+    api_key = os.getenv("GOOGLE_API_KEY")
+    if not api_key:
+        raise ValueError("GOOGLE_API_KEY is not set")
+    return api_key
+
+
+def _first_result_list(result: dict[str, Any], key: str) -> list[Any]:
+    values = result.get(key) or [[]]
+    return values[0] if values else []
+
+
+def retrieve_relevant_chunks(query: str, collection: Any, top_k: int = 5) -> list[RetrievedChunk]:
     """Retrieve top-k relevant chunks from Chroma for a query."""
-    if not query.strip() or top_k <= 0:
+    normalized_query = query.strip()
+    if not normalized_query or top_k <= 0:
         return []
 
     try:
@@ -21,15 +43,11 @@ def retrieve_relevant_chunks(query: str, collection: Any, top_k: int = 5) -> lis
         # If count is unavailable, continue and rely on query result checks.
         pass
 
-    api_key = os.getenv("GOOGLE_API_KEY")
-    if not api_key:
-        raise ValueError("GOOGLE_API_KEY is not set")
-
     embeddings = GoogleGenerativeAIEmbeddings(
-        model="models/text-embedding-004",
-        google_api_key=api_key,
+        model=EMBEDDING_MODEL,
+        google_api_key=_get_google_api_key(),
     )
-    query_vector = embeddings.embed_query(query)
+    query_vector = embeddings.embed_query(normalized_query)
 
     results = collection.query(
         query_embeddings=[query_vector],
@@ -37,14 +55,14 @@ def retrieve_relevant_chunks(query: str, collection: Any, top_k: int = 5) -> lis
         include=["documents", "metadatas", "distances"],
     )
 
-    documents = (results.get("documents") or [[]])[0]
-    metadatas = (results.get("metadatas") or [[]])[0]
-    distances = (results.get("distances") or [[]])[0]
+    documents = _first_result_list(results, "documents")
+    metadatas = _first_result_list(results, "metadatas")
+    distances = _first_result_list(results, "distances")
 
     if not documents:
         return []
 
-    output: list[dict[str, Any]] = []
+    output: list[RetrievedChunk] = []
     for idx, text in enumerate(documents):
         metadata = metadatas[idx] if idx < len(metadatas) and metadatas[idx] else {}
         distance = distances[idx] if idx < len(distances) else None
