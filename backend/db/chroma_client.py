@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import chromadb
 from chromadb.api.models.Collection import Collection
 

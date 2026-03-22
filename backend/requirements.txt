@@ -4,6 +4,7 @@ python-multipart
 chromadb
 google-generativeai
 langchain
+langchain-text-splitters
 langchain-google-genai
 pypdf
 python-dotenv

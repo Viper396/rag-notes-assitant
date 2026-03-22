@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 from typing import Any, TypedDict
 
+from chromadb.api.models.Collection import Collection
 from dotenv import load_dotenv
 from langchain_google_genai import GoogleGenerativeAIEmbeddings
 
@@ -30,7 +31,7 @@ def _first_result_list(result: dict[str, Any], key: str) -> list[Any]:
     return values[0] if values else []
 
 
-def retrieve_relevant_chunks(query: str, collection: Any, top_k: int = 5) -> list[RetrievedChunk]:
+def retrieve_relevant_chunks(query: str, collection: Collection, top_k: int = 5) -> list[RetrievedChunk]:
     """Retrieve top-k relevant chunks from Chroma for a query."""
     normalized_query = query.strip()
     if not normalized_query or top_k <= 0:
@@ -62,12 +63,12 @@ def retrieve_relevant_chunks(query: str, collection: Any, top_k: int = 5) -> lis
     if not documents:
         return []
 
-    output: list[RetrievedChunk] = []
+    retrieved_chunks: list[RetrievedChunk] = []
     for idx, text in enumerate(documents):
         metadata = metadatas[idx] if idx < len(metadatas) and metadatas[idx] else {}
         distance = distances[idx] if idx < len(distances) else None
 
-        output.append(
+        retrieved_chunks.append(
             {
                 "text": text,
                 "source": metadata.get("source"),
@@ -76,4 +77,4 @@ def retrieve_relevant_chunks(query: str, collection: Any, top_k: int = 5) -> lis
             }
         )
 
-    return output
+    return retrieved_chunks

@@ -2,10 +2,11 @@ from __future__ import annotations
 
 import os
 from io import BytesIO
-from typing import Any, TypedDict
+from typing import TypedDict
 
+from chromadb.api.models.Collection import Collection
 from dotenv import load_dotenv
-from langchain.text_splitter import RecursiveCharacterTextSplitter
+from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_google_genai import GoogleGenerativeAIEmbeddings
 from pypdf import PdfReader
 
@@ -56,20 +57,20 @@ def extract_pdf_chunks(file_bytes: bytes, document_name: str) -> list[ChunkRecor
 
     chunks: list[ChunkRecord] = []
 
-    for page_idx, page in enumerate(reader.pages, start=1):
+    for page_number, page in enumerate(reader.pages, start=1):
         page_text = page.extract_text() or ""
         if not page_text.strip():
             continue
 
         page_chunks = splitter.split_text(page_text)
-        for chunk_idx, chunk_text in enumerate(page_chunks):
+        for chunk_index, chunk_text in enumerate(page_chunks):
             chunks.append(
                 {
                     "text": chunk_text,
                     "metadata": {
                         "source": document_name,
-                        "page_number": page_idx,
-                        "chunk_index": chunk_idx,
+                        "page_number": page_number,
+                        "chunk_index": chunk_index,
                     },
                 }
             )
@@ -77,7 +78,7 @@ def extract_pdf_chunks(file_bytes: bytes, document_name: str) -> list[ChunkRecor
     return chunks
 
 
-def embed_and_store(chunks: list[ChunkRecord], collection: Any) -> None:
+def embed_and_store(chunks: list[ChunkRecord], collection: Collection) -> None:
     if not chunks:
         return
 
