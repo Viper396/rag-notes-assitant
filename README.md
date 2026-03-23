@@ -1,71 +1,90 @@
-# RAG Notes Assistant Backend
+# RAG Notes Assistant
 
-A FastAPI backend for uploading lecture-note PDFs, chunking and storing them in ChromaDB, and answering questions with Gemini using source-grounded context.
+Full-stack notes assistant:
 
-## Features
+- Backend: FastAPI + ChromaDB + Gemini
+- Frontend: Next.js 14 (App Router) + Tailwind
 
-- PDF upload endpoint with background embedding
-- ChromaDB persistent vector storage
-- Retrieval endpoint with streamed Gemini responses
-- Source-aware answers with inline citation guidance
-- Document listing endpoint for stored notes
+The app lets you upload lecture-note PDFs, index them, and ask questions with source-cited answers.
 
-## Project Structure
+## Project Layout
 
-- `backend/main.py`: FastAPI app setup and router mounting
-- `backend/routers/upload.py`: Upload and ingestion trigger endpoint
-- `backend/routers/query.py`: Query and documents endpoints
-- `backend/services/ingestion.py`: PDF extraction, chunking, embedding, upsert
-- `backend/services/retriever.py`: Query embedding + vector retrieval
-- `backend/services/generator.py`: Prompting + Gemini answer generation
-- `backend/db/chroma_client.py`: Chroma PersistentClient + collection access
+- `backend/` FastAPI API and retrieval/generation services
+- `frontend/` Next.js chat interface
 
 ## Prerequisites
 
 - Python 3.11+
-- A valid Google API key for Gemini and embeddings
+- Node.js 18+
+- npm 9+
+- Google API key with Gemini and embedding access
 
 ## Environment Setup
 
-1. Create and activate a virtual environment:
+1. Create Python virtual environment at repo root:
 
 ```bash
 python -m venv .venv
-# Windows PowerShell
-.venv\Scripts\Activate.ps1
-# Windows CMD
-.venv\Scripts\activate.bat
 ```
 
-2. Install dependencies:
+2. Install backend dependencies:
 
 ```bash
 .venv\Scripts\python.exe -m pip install -r backend/requirements.txt
 ```
 
-3. Configure environment variables:
+3. Create backend env file:
 
 ```bash
 copy .env.example .env
 ```
 
-Then set `GOOGLE_API_KEY` in `.env`.
+Set `GOOGLE_API_KEY` in `.env`.
 
-## Run the Backend
+4. Install frontend dependencies:
+
+```bash
+cd frontend
+npm install
+```
+
+`frontend/.env.local` is already configured for local backend access:
+
+```env
+NEXT_PUBLIC_API_URL=http://localhost:8000
+```
+
+## Run Locally
+
+Start backend (terminal 1):
 
 ```bash
 cd backend
 ..\.venv\Scripts\python.exe -m uvicorn main:app --reload --host 0.0.0.0 --port 8000
 ```
 
-## API Endpoints
+Start frontend (terminal 2):
+
+```bash
+cd frontend
+npm run dev
+```
+
+Open:
+
+- Frontend: http://localhost:3000
+- Backend: http://localhost:8000
+
+## API Summary
 
 - `GET /` health check
-- `POST /api/upload` upload a PDF file
-- `POST /api/query` stream an answer for a question
-- `GET /api/documents` list unique document names in Chroma
+- `POST /api/upload` upload a PDF
+- `POST /api/query` stream an answer
+- `GET /api/documents` list indexed document names
 
-## Notes
+## Implementation Notes
 
-- Chroma data is stored in `backend/chroma_store`.
-- Upload processing is split into extraction/chunking (request thread) and embedding/upsert (background task) to keep uploads responsive.
+- Chroma persistence path: `backend/chroma_store`
+- Upload flow: extract and chunk immediately, embed/store in background task
+- Query flow: retrieve nearest chunks, stream Gemini answer, return source metadata
+- Frontend dev proxy: `/api/*` rewrites to backend in development

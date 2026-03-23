@@ -26,8 +26,19 @@ build/
 dist/
 *.egg-info/
 
+# Frontend artifacts
+frontend/node_modules/
+frontend/.next/
+frontend/out/
+frontend/.turbo/
+frontend/.env.local
+
 # Local database/vector store data
 backend/chroma_store/
+
+# Local assistant metadata
+frontend/AGENTS.md
+frontend/CLAUDE.md
 
 # OS files
 .DS_Store
