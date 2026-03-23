@@ -3,6 +3,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 
+import UploadModal from "../components/UploadModal";
+
 type SourceItem = {
   source: string;
   page: number;
@@ -292,6 +294,10 @@ export default function HomePage() {
           >
             {isLoadingDocs ? "..." : "Refresh"}
           </button>
+        </div>
+
+        <div className="mb-4">
+          <UploadModal onUploadSuccess={() => void fetchDocuments()} />
         </div>
 
         <div className="flex-1 overflow-y-auto">

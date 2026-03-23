@@ -82,6 +82,14 @@ Open:
 - `POST /api/query` stream an answer
 - `GET /api/documents` list indexed document names
 
+## Frontend Experience
+
+- Sidebar includes a `+ Upload Notes` modal with drag-and-drop PDF upload (max 20MB)
+- Upload UI includes file preview, progress bar, and success/error toasts
+- Chat supports Markdown assistant responses with source citation badges
+- Responses stream in real time from the backend query endpoint
+- Input behavior: `Enter` sends, `Shift+Enter` inserts newline
+
 ## Implementation Notes
 
 - Chroma persistence path: `backend/chroma_store`
