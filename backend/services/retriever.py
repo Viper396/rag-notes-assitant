@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import os
-from typing import Any, TypedDict
+from typing import Any, Sequence, TypedDict
 
 from chromadb.api.models.Collection import Collection
 from dotenv import load_dotenv
@@ -31,7 +31,12 @@ def _first_result_list(result: dict[str, Any], key: str) -> list[Any]:
     return values[0] if values else []
 
 
-def retrieve_relevant_chunks(query: str, collection: Collection, top_k: int = 5) -> list[RetrievedChunk]:
+def retrieve_relevant_chunks(
+    query: str,
+    collection: Collection,
+    top_k: int = 5,
+    filter_documents: Sequence[str] | None = None,
+) -> list[RetrievedChunk]:
     """Retrieve top-k relevant chunks from Chroma for a query."""
     normalized_query = query.strip()
     if not normalized_query or top_k <= 0:
@@ -50,10 +55,15 @@ def retrieve_relevant_chunks(query: str, collection: Collection, top_k: int = 5)
     )
     query_vector = embeddings.embed_query(normalized_query)
 
+    where_filter: dict[str, Any] | None = None
+    if filter_documents:
+        where_filter = {"source": {"$in": list(filter_documents)}}
+
     results = collection.query(
         query_embeddings=[query_vector],
         n_results=top_k,
         include=["documents", "metadatas", "distances"],
+        where=where_filter,
     )
 
     documents = _first_result_list(results, "documents")

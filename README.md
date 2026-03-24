@@ -79,13 +79,14 @@ Open:
 
 - `GET /` health check
 - `POST /api/upload` upload a PDF
-- `POST /api/query` stream an answer
+- `POST /api/query` stream an answer (supports optional `filter_documents` array)
 - `GET /api/documents` list indexed document names
 
 ## Frontend Experience
 
 - Sidebar includes a `+ Upload Notes` modal with drag-and-drop PDF upload (max 20MB)
 - Upload UI includes file preview, progress bar, and success/error toasts
+- Sidebar document list includes checkboxes for per-query filtering
 - Chat supports Markdown assistant responses with source citation badges
 - Responses stream in real time from the backend query endpoint
 - Input behavior: `Enter` sends, `Shift+Enter` inserts newline
@@ -95,4 +96,5 @@ Open:
 - Chroma persistence path: `backend/chroma_store`
 - Upload flow: extract and chunk immediately, embed/store in background task
 - Query flow: retrieve nearest chunks, stream Gemini answer, return source metadata
+- Query filtering: when selected documents are checked in the sidebar, the frontend sends `filter_documents`; when none are selected, retrieval runs across all documents
 - Frontend dev proxy: `/api/*` rewrites to backend in development

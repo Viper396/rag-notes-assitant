@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 
 import UploadModal from "../components/UploadModal";
@@ -37,6 +37,8 @@ function TypingIndicator() {
 
 export default function HomePage() {
   const [documents, setDocuments] = useState<string[]>([]);
+  const [selectedDocuments, setSelectedDocuments] = useState<string[]>([]);
+  const [hasInitializedSelection, setHasInitializedSelection] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [isSending, setIsSending] = useState(false);
@@ -48,18 +50,7 @@ export default function HomePage() {
     [input, isSending],
   );
 
-  useEffect(() => {
-    void fetchDocuments();
-  }, []);
-
-  useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({
-      behavior: "smooth",
-      block: "end",
-    });
-  }, [messages, isSending]);
-
-  async function fetchDocuments() {
+  const fetchDocuments = useCallback(async () => {
     setIsLoadingDocs(true);
     try {
       const response = await fetch("/api/documents");
@@ -68,12 +59,43 @@ export default function HomePage() {
       }
 
       const payload = (await response.json()) as { documents?: string[] };
-      setDocuments(Array.isArray(payload.documents) ? payload.documents : []);
+      const nextDocuments = Array.isArray(payload.documents)
+        ? payload.documents
+        : [];
+      setDocuments(nextDocuments);
+      setSelectedDocuments((previous) => {
+        if (!hasInitializedSelection) {
+          return [...nextDocuments];
+        }
+
+        return previous.filter((doc) => nextDocuments.includes(doc));
+      });
+      setHasInitializedSelection(true);
     } catch {
       setDocuments([]);
+      setSelectedDocuments([]);
     } finally {
       setIsLoadingDocs(false);
     }
+  }, [hasInitializedSelection]);
+
+  useEffect(() => {
+    void fetchDocuments();
+  }, [fetchDocuments]);
+
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({
+      behavior: "smooth",
+      block: "end",
+    });
+  }, [messages, isSending]);
+
+  function toggleDocumentSelection(documentName: string) {
+    setSelectedDocuments((previous) =>
+      previous.includes(documentName)
+        ? previous.filter((name) => name !== documentName)
+        : [...previous, documentName],
+    );
   }
 
   async function handleSend() {
@@ -115,6 +137,9 @@ export default function HomePage() {
         body: JSON.stringify({
           question,
           chat_history: chatHistory,
+          ...(selectedDocuments.length > 0
+            ? { filter_documents: selectedDocuments }
+            : {}),
         }),
       });
 
@@ -310,7 +335,15 @@ export default function HomePage() {
                   key={documentName}
                   className="rounded-md border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100"
                 >
-                  {documentName}
+                  <label className="flex cursor-pointer items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={selectedDocuments.includes(documentName)}
+                      onChange={() => toggleDocumentSelection(documentName)}
+                      className="h-4 w-4 rounded border-zinc-500 bg-zinc-800 text-zinc-200 accent-zinc-200"
+                    />
+                    <span className="truncate">{documentName}</span>
+                  </label>
                 </li>
               ))}
             </ul>
