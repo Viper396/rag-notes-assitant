@@ -9,7 +9,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field, field_validator
 
 from db.chroma_client import get_collection
-from services.generator import AnswerSource, generate_answer
+from services.generator import AnswerSource, generate_answer, generate_follow_up_questions
 from services.retriever import retrieve_relevant_chunks
 
 router = APIRouter()
@@ -87,14 +87,22 @@ async def _stream_answer_response(
             chat_history=[item.model_dump() for item in chat_history],
             stream=True,
         )
+        answer_parts: list[str] = []
         for token_text in stream:
+            answer_parts.append(token_text)
             # Escape each streamed token so final output remains valid JSON.
             yield json.dumps(token_text)[1:-1]
-        yield '"}'
+
+        follow_up_questions = generate_follow_up_questions(
+            question=question,
+            answer="".join(answer_parts).strip(),
+        )
+        yield '",'
+        yield f'"follow_up_questions":{json.dumps(follow_up_questions)}}}'
     except Exception as exc:
         error_text = f"Error generating answer: {exc}"
         yield json.dumps(error_text)[1:-1]
-        yield '"}'
+        yield '","follow_up_questions":[]}'
 
 
 @router.post("")

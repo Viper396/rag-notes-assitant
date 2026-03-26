@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import os
 from typing import Any, Iterator, Sequence, TypedDict
 
@@ -20,6 +21,7 @@ class AnswerSource(TypedDict):
 class AnswerPayload(TypedDict):
     answer: str
     sources: list[AnswerSource]
+    follow_up_questions: list[str]
 
 
 def _get_google_api_key() -> str:
@@ -120,6 +122,40 @@ def stream_answer_tokens(
         yield FALLBACK_MESSAGE
 
 
+def _extract_json_array(text: str) -> list[str]:
+    stripped = text.strip()
+    candidates = [stripped]
+
+    if "```" in stripped:
+        lines = [line for line in stripped.splitlines() if not line.strip().startswith("```")]
+        candidates.append("\n".join(lines).strip())
+
+    for candidate in candidates:
+        try:
+            parsed = json.loads(candidate)
+        except json.JSONDecodeError:
+            continue
+
+        if isinstance(parsed, list):
+            return [item.strip() for item in parsed if isinstance(item, str) and item.strip()]
+
+    return []
+
+
+def generate_follow_up_questions(question: str, answer: str) -> list[str]:
+    model = _create_generative_model()
+    prompt = (
+        "Generate 3 short follow-up questions a student might ask based on this answer. "
+        "Return as JSON array of strings only.\n\n"
+        f"Question:\n{question}\n\n"
+        f"Answer:\n{answer}\n"
+    )
+
+    response = model.generate_content(prompt)
+    raw_text = (getattr(response, "text", "") or "").strip()
+    return _extract_json_array(raw_text)
+
+
 def generate_answer(
     query: str,
     context_chunks: list[dict[str, Any]],
@@ -142,7 +178,10 @@ def generate_answer(
     if not answer_text:
         answer_text = FALLBACK_MESSAGE
 
+    follow_up_questions = generate_follow_up_questions(query, answer_text)
+
     return {
         "answer": answer_text,
         "sources": _collect_sources(context_chunks),
+        "follow_up_questions": follow_up_questions,
     }

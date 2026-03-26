@@ -15,12 +15,14 @@ type ChatMessage = {
   role: "user" | "assistant";
   content: string;
   sources?: SourceItem[];
+  followUpQuestions?: string[];
 };
 
 type QueryResponse = {
   question: string;
   answer: string;
   sources: SourceItem[];
+  follow_up_questions?: string[];
 };
 
 const ANSWER_PREFIX = '"answer":"';
@@ -98,8 +100,8 @@ export default function HomePage() {
     );
   }
 
-  async function handleSend() {
-    const question = input.trim();
+  async function submitQuestion(rawQuestion: string) {
+    const question = rawQuestion.trim();
     if (!question || isSending) {
       return;
     }
@@ -116,6 +118,7 @@ export default function HomePage() {
       role: "assistant",
       content: "",
       sources: [],
+      followUpQuestions: [],
     };
 
     const conversation = [...messages, userMessage];
@@ -275,6 +278,9 @@ export default function HomePage() {
                   ...message,
                   content: parsed.answer ?? message.content,
                   sources: Array.isArray(parsed.sources) ? parsed.sources : [],
+                  followUpQuestions: Array.isArray(parsed.follow_up_questions)
+                    ? parsed.follow_up_questions
+                    : [],
                 }
               : message,
           ),
@@ -289,6 +295,7 @@ export default function HomePage() {
                 content:
                   "I hit an error while generating a response. Please try again.",
                 sources: [],
+                followUpQuestions: [],
               }
             : message,
         ),
@@ -296,6 +303,15 @@ export default function HomePage() {
     } finally {
       setIsSending(false);
     }
+  }
+
+  async function handleSend() {
+    await submitQuestion(input);
+  }
+
+  function handleFollowUpClick(question: string) {
+    setInput(question);
+    void submitQuestion(question);
   }
 
   function handleInputKeyDown(event: React.KeyboardEvent<HTMLTextAreaElement>) {
@@ -400,6 +416,27 @@ export default function HomePage() {
                               {source.source} p.{source.page}
                             </span>
                           ))}
+                        </div>
+                      ) : null}
+
+                      {!isUser &&
+                      message.followUpQuestions &&
+                      message.followUpQuestions.length > 0 ? (
+                        <div className="mt-3 flex flex-wrap gap-2">
+                          {message.followUpQuestions.map(
+                            (followUpQuestion, index) => (
+                              <button
+                                key={`${message.id}-followup-${index}`}
+                                type="button"
+                                onClick={() =>
+                                  handleFollowUpClick(followUpQuestion)
+                                }
+                                className="rounded-full border border-zinc-500 bg-zinc-900 px-3 py-1 text-left text-xs text-zinc-200 transition hover:border-zinc-300 hover:bg-zinc-700"
+                              >
+                                {followUpQuestion}
+                              </button>
+                            ),
+                          )}
                         </div>
                       ) : null}
                     </div>
