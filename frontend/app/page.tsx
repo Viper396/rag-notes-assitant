@@ -45,6 +45,12 @@ export default function HomePage() {
   const [input, setInput] = useState("");
   const [isSending, setIsSending] = useState(false);
   const [isLoadingDocs, setIsLoadingDocs] = useState(false);
+  const [isSummaryDrawerOpen, setIsSummaryDrawerOpen] = useState(false);
+  const [isSummarizing, setIsSummarizing] = useState(false);
+  const [summaryDocument, setSummaryDocument] = useState<string>("");
+  const [summaryText, setSummaryText] = useState<string>("");
+  const [summaryError, setSummaryError] = useState<string>("");
+  const [copyButtonLabel, setCopyButtonLabel] = useState("Copy to clipboard");
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
 
   const canSend = useMemo(
@@ -100,6 +106,194 @@ export default function HomePage() {
     );
   }
 
+  async function requestQueryResponse(params: {
+    question: string;
+    chatHistory?: Array<{ role: string; content: string }>;
+    filterDocuments?: string[];
+    onAnswerChunk?: (chunk: string) => void;
+  }): Promise<QueryResponse | null> {
+    const {
+      question,
+      chatHistory = [],
+      filterDocuments,
+      onAnswerChunk,
+    } = params;
+
+    const response = await fetch("/api/query", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        question,
+        chat_history: chatHistory,
+        ...(filterDocuments && filterDocuments.length > 0
+          ? { filter_documents: filterDocuments }
+          : {}),
+      }),
+    });
+
+    if (!response.ok || !response.body) {
+      throw new Error("Unable to stream assistant response");
+    }
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+
+    let rawJson = "";
+    let inAnswer = false;
+    let markerBuffer = "";
+    let escapeNext = false;
+    let unicodeBuffer = "";
+    let unicodeRemaining = 0;
+
+    const consumeCharacter = (char: string) => {
+      if (!onAnswerChunk) {
+        return;
+      }
+
+      if (!inAnswer) {
+        markerBuffer = (markerBuffer + char).slice(-ANSWER_PREFIX.length);
+        if (markerBuffer === ANSWER_PREFIX) {
+          inAnswer = true;
+          markerBuffer = "";
+        }
+        return;
+      }
+
+      if (unicodeRemaining > 0) {
+        unicodeBuffer += char;
+        unicodeRemaining -= 1;
+
+        if (unicodeRemaining === 0) {
+          const codePoint = Number.parseInt(unicodeBuffer, 16);
+          if (!Number.isNaN(codePoint)) {
+            onAnswerChunk(String.fromCharCode(codePoint));
+          }
+          unicodeBuffer = "";
+        }
+        return;
+      }
+
+      if (escapeNext) {
+        escapeNext = false;
+        switch (char) {
+          case "n":
+            onAnswerChunk("\n");
+            break;
+          case "r":
+            onAnswerChunk("\r");
+            break;
+          case "t":
+            onAnswerChunk("\t");
+            break;
+          case "\\":
+            onAnswerChunk("\\");
+            break;
+          case '"':
+            onAnswerChunk('"');
+            break;
+          case "/":
+            onAnswerChunk("/");
+            break;
+          case "b":
+            onAnswerChunk("\b");
+            break;
+          case "f":
+            onAnswerChunk("\f");
+            break;
+          case "u":
+            unicodeRemaining = 4;
+            unicodeBuffer = "";
+            break;
+          default:
+            onAnswerChunk(char);
+            break;
+        }
+        return;
+      }
+
+      if (char === "\\") {
+        escapeNext = true;
+        return;
+      }
+
+      if (char === '"') {
+        inAnswer = false;
+        return;
+      }
+
+      onAnswerChunk(char);
+    };
+
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) {
+        break;
+      }
+
+      const chunk = decoder.decode(value, { stream: true });
+      rawJson += chunk;
+
+      for (const char of chunk) {
+        consumeCharacter(char);
+      }
+    }
+
+    try {
+      return JSON.parse(rawJson) as QueryResponse;
+    } catch {
+      return null;
+    }
+  }
+
+  async function handleSummarizeDocument(documentName: string) {
+    if (isSummarizing) {
+      return;
+    }
+
+    setIsSummaryDrawerOpen(true);
+    setIsSummarizing(true);
+    setSummaryDocument(documentName);
+    setSummaryText("");
+    setSummaryError("");
+    setCopyButtonLabel("Copy to clipboard");
+
+    try {
+      const summaryPrompt = `Summarize the entire document ${documentName} in 8 bullet points covering the key concepts`;
+      const parsed = await requestQueryResponse({
+        question: summaryPrompt,
+        chatHistory: [],
+        filterDocuments: [documentName],
+      });
+
+      if (!parsed?.answer) {
+        throw new Error("No summary returned");
+      }
+
+      setSummaryText(parsed.answer);
+    } catch {
+      setSummaryError("Failed to summarize this document. Please try again.");
+    } finally {
+      setIsSummarizing(false);
+    }
+  }
+
+  async function handleCopySummary() {
+    if (!summaryText) {
+      return;
+    }
+
+    try {
+      await navigator.clipboard.writeText(summaryText);
+      setCopyButtonLabel("Copied!");
+      window.setTimeout(() => setCopyButtonLabel("Copy to clipboard"), 1400);
+    } catch {
+      setCopyButtonLabel("Copy failed");
+      window.setTimeout(() => setCopyButtonLabel("Copy to clipboard"), 1400);
+    }
+  }
+
   async function submitQuestion(rawQuestion: string) {
     const question = rawQuestion.trim();
     if (!question || isSending) {
@@ -132,143 +326,25 @@ export default function HomePage() {
     setIsSending(true);
 
     try {
-      const response = await fetch("/api/query", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
+      const parsed = await requestQueryResponse({
+        question,
+        chatHistory,
+        filterDocuments:
+          selectedDocuments.length > 0 ? selectedDocuments : undefined,
+        onAnswerChunk: (text) => {
+          if (!text) {
+            return;
+          }
+
+          setMessages((previous) =>
+            previous.map((message) =>
+              message.id === assistantMessageId
+                ? { ...message, content: message.content + text }
+                : message,
+            ),
+          );
         },
-        body: JSON.stringify({
-          question,
-          chat_history: chatHistory,
-          ...(selectedDocuments.length > 0
-            ? { filter_documents: selectedDocuments }
-            : {}),
-        }),
       });
-
-      if (!response.ok || !response.body) {
-        throw new Error("Unable to stream assistant response");
-      }
-
-      const reader = response.body.getReader();
-      const decoder = new TextDecoder();
-
-      let rawJson = "";
-      let inAnswer = false;
-      let markerBuffer = "";
-      let escapeNext = false;
-      let unicodeBuffer = "";
-      let unicodeRemaining = 0;
-
-      const appendToAssistant = (text: string) => {
-        if (!text) {
-          return;
-        }
-
-        setMessages((previous) =>
-          previous.map((message) =>
-            message.id === assistantMessageId
-              ? { ...message, content: message.content + text }
-              : message,
-          ),
-        );
-      };
-
-      const consumeCharacter = (char: string) => {
-        if (!inAnswer) {
-          markerBuffer = (markerBuffer + char).slice(-ANSWER_PREFIX.length);
-          if (markerBuffer === ANSWER_PREFIX) {
-            inAnswer = true;
-            markerBuffer = "";
-          }
-          return;
-        }
-
-        if (unicodeRemaining > 0) {
-          unicodeBuffer += char;
-          unicodeRemaining -= 1;
-
-          if (unicodeRemaining === 0) {
-            const codePoint = Number.parseInt(unicodeBuffer, 16);
-            if (!Number.isNaN(codePoint)) {
-              appendToAssistant(String.fromCharCode(codePoint));
-            }
-            unicodeBuffer = "";
-          }
-          return;
-        }
-
-        if (escapeNext) {
-          escapeNext = false;
-          switch (char) {
-            case "n":
-              appendToAssistant("\n");
-              break;
-            case "r":
-              appendToAssistant("\r");
-              break;
-            case "t":
-              appendToAssistant("\t");
-              break;
-            case "\\":
-              appendToAssistant("\\");
-              break;
-            case '"':
-              appendToAssistant('"');
-              break;
-            case "/":
-              appendToAssistant("/");
-              break;
-            case "b":
-              appendToAssistant("\b");
-              break;
-            case "f":
-              appendToAssistant("\f");
-              break;
-            case "u":
-              unicodeRemaining = 4;
-              unicodeBuffer = "";
-              break;
-            default:
-              appendToAssistant(char);
-              break;
-          }
-          return;
-        }
-
-        if (char === "\\") {
-          escapeNext = true;
-          return;
-        }
-
-        if (char === '"') {
-          inAnswer = false;
-          return;
-        }
-
-        appendToAssistant(char);
-      };
-
-      while (true) {
-        const { value, done } = await reader.read();
-        if (done) {
-          break;
-        }
-
-        const chunk = decoder.decode(value, { stream: true });
-        rawJson += chunk;
-
-        for (const char of chunk) {
-          consumeCharacter(char);
-        }
-      }
-
-      let parsed: QueryResponse | null = null;
-      try {
-        parsed = JSON.parse(rawJson) as QueryResponse;
-      } catch {
-        parsed = null;
-      }
 
       if (parsed) {
         setMessages((previous) =>
@@ -360,10 +436,80 @@ export default function HomePage() {
                     />
                     <span className="truncate">{documentName}</span>
                   </label>
+                  <button
+                    type="button"
+                    onClick={() => void handleSummarizeDocument(documentName)}
+                    className="mt-2 w-full rounded-md border border-zinc-600 bg-zinc-800 px-2 py-1 text-xs text-zinc-200 transition hover:border-zinc-300 hover:text-white"
+                  >
+                    Summarize
+                  </button>
                 </li>
               ))}
             </ul>
           )}
+        </div>
+      </aside>
+
+      <div
+        className={`fixed inset-0 z-40 bg-black/40 transition-opacity ${
+          isSummaryDrawerOpen ? "opacity-100" : "pointer-events-none opacity-0"
+        }`}
+        onClick={() => setIsSummaryDrawerOpen(false)}
+      />
+
+      <aside
+        className={`fixed right-0 top-0 z-50 flex h-screen w-full max-w-xl flex-col border-l border-zinc-700 bg-zinc-900 shadow-2xl transition-transform duration-300 ${
+          isSummaryDrawerOpen ? "translate-x-0" : "translate-x-full"
+        }`}
+      >
+        <div className="flex items-center justify-between border-b border-zinc-700 px-5 py-4">
+          <div>
+            <h3 className="text-base font-semibold text-white">
+              Document Summary
+            </h3>
+            <p className="text-xs text-zinc-400">
+              {summaryDocument || "No document selected"}
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setIsSummaryDrawerOpen(false)}
+            className="rounded-md border border-zinc-600 px-3 py-1 text-xs text-zinc-200 hover:border-zinc-300"
+          >
+            Close
+          </button>
+        </div>
+
+        <div className="flex-1 overflow-y-auto px-5 py-4">
+          {isSummarizing ? (
+            <div className="mt-2">
+              <p className="mb-3 text-sm text-zinc-300">
+                Generating summary...
+              </p>
+              <TypingIndicator />
+            </div>
+          ) : summaryError ? (
+            <p className="text-sm text-red-300">{summaryError}</p>
+          ) : summaryText ? (
+            <div className="prose prose-invert prose-sm max-w-none">
+              <ReactMarkdown>{summaryText}</ReactMarkdown>
+            </div>
+          ) : (
+            <p className="text-sm text-zinc-400">
+              Choose a document and click Summarize.
+            </p>
+          )}
+        </div>
+
+        <div className="border-t border-zinc-700 px-5 py-4">
+          <button
+            type="button"
+            onClick={() => void handleCopySummary()}
+            disabled={!summaryText || isSummarizing}
+            className="w-full rounded-lg bg-white px-4 py-2 text-sm font-semibold text-zinc-900 transition hover:bg-zinc-200 disabled:cursor-not-allowed disabled:bg-zinc-600 disabled:text-zinc-300"
+          >
+            {copyButtonLabel}
+          </button>
         </div>
       </aside>
 

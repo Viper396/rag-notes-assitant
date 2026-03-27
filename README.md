@@ -93,6 +93,7 @@ Open:
 - Sidebar includes a `+ Upload Notes` modal with drag-and-drop PDF upload (max 20MB)
 - Upload UI includes file preview, progress bar, and success/error toasts
 - Sidebar document list includes checkboxes for per-query filtering
+- Each document card includes a `Summarize` action that opens a right-side summary drawer
 - Chat supports Markdown assistant responses with source citation badges
 - Responses stream in real time from the backend query endpoint
 - Assistant responses include clickable follow-up question chips
@@ -104,5 +105,6 @@ Open:
 - Upload flow: extract and chunk immediately, embed/store in background task
 - Query flow: retrieve nearest chunks, stream Gemini answer, return source metadata
 - Query filtering: when selected documents are checked in the sidebar, the frontend sends `filter_documents`; when none are selected, retrieval runs across all documents
+- Summary flow: `Summarize` sends a document-scoped query and renders results in a dedicated side drawer with copy-to-clipboard
 - Follow-up generation: after each answer, a second Gemini call generates 3 follow-up suggestions returned as JSON strings
 - Frontend dev proxy: `/api/*` rewrites to backend in development

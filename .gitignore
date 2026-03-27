@@ -35,6 +35,8 @@ frontend/.next/
 frontend/out/
 frontend/.turbo/
 frontend/.env.local
+frontend/.eslintcache
+frontend/coverage/
 
 # Local database/vector store data
 backend/chroma_store/
