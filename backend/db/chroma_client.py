@@ -1,12 +1,13 @@
 from __future__ import annotations
 
 import chromadb
+from chromadb.api import ClientAPI
 from chromadb.api.models.Collection import Collection
 
 COLLECTION_NAME = "lecture_notes"
 COLLECTION_METADATA = {"hnsw:space": "cosine"}
 
-_client: chromadb.EphemeralClient | None = None
+_client: ClientAPI | None = None
 _collection: Collection | None = None
 
 
@@ -16,8 +17,12 @@ def _ensure_collection() -> Collection:
     if _collection is not None:
         return _collection
 
-    _client = chromadb.EphemeralClient()
-    _collection = _client.get_or_create_collection(
+    client = _client
+    if client is None:
+        client = chromadb.EphemeralClient()
+        _client = client
+
+    _collection = client.get_or_create_collection(
         name=COLLECTION_NAME,
         metadata=COLLECTION_METADATA,
     )

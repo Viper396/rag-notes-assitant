@@ -1,3 +1,5 @@
+
+import os
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -6,7 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from db.chroma_client import get_collection
 from routers import query, upload
 
-FRONTEND_ORIGIN = "http://localhost:3000"
+FRONTEND_ORIGIN = os.getenv("FRONTEND_ORIGIN", "http://localhost:3000")
 API_TITLE = "RAG Notes Assistant API"
 API_VERSION = "1.0.0"
 
