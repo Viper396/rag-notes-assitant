@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+import os
+
 import chromadb
 from chromadb.api.models.Collection import Collection
 
-CHROMA_PATH = "./chroma_store"
+CHROMA_PATH = os.getenv("CHROMA_PATH", "./chroma_store")
 COLLECTION_NAME = "lecture_notes"
 COLLECTION_METADATA = {"hnsw:space": "cosine"}
 

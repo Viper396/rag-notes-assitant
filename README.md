@@ -54,6 +54,17 @@ npm install
 NEXT_PUBLIC_API_URL=http://localhost:8000
 ```
 
+## Required Environment Variables
+
+Backend:
+
+- `GOOGLE_API_KEY`: Gemini + embeddings API key
+- `CHROMA_PATH` (optional): Chroma persistence path (default: `./chroma_store`)
+
+Frontend:
+
+- `NEXT_PUBLIC_API_URL`: backend base URL used for production rewrites
+
 ## Run Locally
 
 Start backend (terminal 1):
@@ -74,6 +85,46 @@ Open:
 
 - Frontend: http://localhost:3000
 - Backend: http://localhost:8000
+
+## Deployment
+
+### Render (Backend)
+
+Config file: `backend/render.yaml`
+
+- Free tier web service
+- Build: `pip install -r requirements.txt`
+- Start: `uvicorn main:app --host 0.0.0.0 --port $PORT`
+- Persistent disk: mounted at `/chroma_store` (0.1GB)
+- Set `GOOGLE_API_KEY` in Render dashboard environment settings
+
+One-command deploy with Render Blueprint CLI:
+
+```bash
+render blueprint apply -f backend/render.yaml
+```
+
+### Vercel (Frontend)
+
+Config file: `frontend/vercel.json` with API rewrite target.
+
+Before deploy, set frontend production env var:
+
+```bash
+vercel env add NEXT_PUBLIC_API_URL production
+```
+
+Set the value to your Render backend URL, for example:
+
+```text
+https://your-render-url.onrender.com
+```
+
+One-command deploy:
+
+```bash
+cd frontend && vercel --prod
+```
 
 ## API Summary
 
@@ -97,6 +148,7 @@ Open:
 - Chat supports Markdown assistant responses with source citation badges
 - Responses stream in real time from the backend query endpoint
 - Assistant responses include clickable follow-up question chips
+- Sidebar has per-document `Summarize` actions opening a right-side summary drawer
 - Input behavior: `Enter` sends, `Shift+Enter` inserts newline
 
 ## Implementation Notes
@@ -107,4 +159,4 @@ Open:
 - Query filtering: when selected documents are checked in the sidebar, the frontend sends `filter_documents`; when none are selected, retrieval runs across all documents
 - Summary flow: `Summarize` sends a document-scoped query and renders results in a dedicated side drawer with copy-to-clipboard
 - Follow-up generation: after each answer, a second Gemini call generates 3 follow-up suggestions returned as JSON strings
-- Frontend dev proxy: `/api/*` rewrites to backend in development
+- Frontend rewrites: `/api/*` points to localhost in development and `NEXT_PUBLIC_API_URL` in production
